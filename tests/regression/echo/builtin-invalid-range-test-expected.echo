@@ -76,3 +76,7 @@ WARNING: Unable to convert scale("test") parameter to a number or a vec3 or vec2
 WARNING: Problem converting rotate(a="test") parameter in file builtin-invalid-range-test.scad, line 28
 WARNING: Unable to convert translate([0, "test", 0]) parameter to a vec3 or vec2 of numbers in file builtin-invalid-range-test.scad, line 30
 ECHO: "Those are okay"
+ECHO: "cylinder with only r1 or r2 out of range"
+WARNING: cylinder(r1=-1, r2=undef, ...) in file builtin-invalid-range-test.scad, line 38
+WARNING: cylinder(r1=undef, r2=-1, ...) in file builtin-invalid-range-test.scad, line 39
+WARNING: cylinder(r1=undef, r2=-1, ...) in file builtin-invalid-range-test.scad, line 40

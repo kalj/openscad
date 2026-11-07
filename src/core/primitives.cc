@@ -475,6 +475,12 @@ std::unique_ptr<const Geometry> CylinderNode::createGeometry() const
   return polyset;
 }
 
+// r1/r2 fall back to r, which may not be set either (e.g. cylinder(r2=-1)).
+static std::string radiusEchoString(const boost::optional<const Value>& r)
+{
+  return r ? r->toEchoStringNoThrow() : "undef";
+}
+
 static std::shared_ptr<AbstractNode> builtin_cylinder(const ModuleInstantiation *inst,
                                                       Arguments arguments)
 {
@@ -513,8 +519,8 @@ static std::shared_ptr<AbstractNode> builtin_cylinder(const ModuleInstantiation 
     if (node->r1 < 0 || node->r2 < 0 || (node->r1 == 0 && node->r2 == 0) || !std::isfinite(node->r1) ||
         !std::isfinite(node->r2)) {
       LOG(message_group::Warning, inst->location(), parameters.documentRoot(),
-          "cylinder(r1=%1$s, r2=%2$s, ...)", (r1 ? r1->toEchoStringNoThrow() : r->toEchoStringNoThrow()),
-          (r2 ? r2->toEchoStringNoThrow() : r->toEchoStringNoThrow()));
+          "cylinder(r1=%1$s, r2=%2$s, ...)", radiusEchoString(r1 ? r1 : r),
+          radiusEchoString(r2 ? r2 : r));
     }
   }
 

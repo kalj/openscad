@@ -33,3 +33,8 @@ for(i=tests){
 echo("Those are okay");
 cylinder(r1=1,r2=0,h=10);
 cylinder(r1=0,r2=1,h=10);
+
+echo("cylinder with only r1 or r2 out of range");
+cylinder(h=1, r1=-1);
+cylinder(h=1, r2=-1);
+cylinder(h=1, d2=-2);
