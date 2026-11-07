@@ -11,6 +11,9 @@ The workflow builds OpenSCAD with MSYS2 UCRT64 on `windows-latest` for:
   [#7151](https://github.com/openscad/openscad/pull/7151),
   [#7187](https://github.com/openscad/openscad/pull/7187)
 - all three merged together (`combined`)
+- `fix1`: [kalj:do-export-cwd](https://github.com/kalj/openscad/tree/do-export-cwd), which stops
+  command-line runs aborting when `do_export()` can't change the working directory
+- `all`: the three PRs plus `fix1`
 
 Each build then runs `openscad.exe -o out.echo` on small test files (`use <>`,
 `include <>`, a warning and a syntax error) reached through:
@@ -30,3 +33,9 @@ table on the workflow run page; full logs are in the `unc-results-*` artifacts.
 
 The branch only contains this harness, so pushing it doesn't run any of the
 project's other workflows. Run it again with "Run workflow" on the Actions tab.
+
+A separate `fs-diagnostics` job builds `scripts/unc-fs-diag.cpp` with the same
+toolchain and prints what each `std::filesystem` step (`absolute()`,
+`parent_path()`, `generic_string()`, `canonical()`, `relative()`,
+`current_path()`) returns for local, UNC and mapped-drive paths, to find where a
+UNC path loses its `\\server\share` prefix.

@@ -26,6 +26,11 @@ jobs:
             refs: '7187'
           - variant: combined
             refs: '7004 7151 7187'
+          # Fix 1: don't abort when do_export() can't change the working directory.
+          - variant: fix1
+            refs: 'kalj:do-export-cwd'
+          - variant: all
+            refs: '7004 7151 7187 kalj:do-export-cwd'
     runs-on: windows-latest
     name: ${{ matrix.variant }}
     defaults:
@@ -51,10 +56,16 @@ jobs:
         run: |
           git config user.name "UNC test"
           git config user.email "unc-test@invalid"
-          for pr in ${{ matrix.refs }}; do
-            git fetch -q origin "pull/$pr/head:pr-$pr"
-            git merge -q --no-edit "pr-$pr"
-            echo "merged #$pr at $(git rev-parse --short pr-$pr)"
+          # A number is an upstream PR; owner:branch is a branch of owner's fork.
+          for ref in ${{ matrix.refs }}; do
+            case "$ref" in
+              *:*) git fetch -q "https://github.com/${ref%%:*}/openscad.git" "${ref#*:}"
+                   name="$ref" ;;
+              *)   git fetch -q origin "pull/$ref/head"
+                   name="#$ref" ;;
+            esac
+            git merge -q --no-edit FETCH_HEAD
+            echo "merged $name at $(git rev-parse --short FETCH_HEAD)"
           done
           git submodule update --init --recursive
       - name: Record tested commit
@@ -98,6 +109,47 @@ jobs:
           name: unc-results-${{ matrix.variant }}
           path: unc-results
 
+  # Shows what each std::filesystem step returns for UNC and other paths with the
+  # MinGW toolchain, to find where a UNC path loses its \\server\share prefix.
+  fs-diagnostics:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout test harness
+        uses: actions/checkout@v7
+      - name: Setup MSYS2 Environment
+        uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          pacboy: toolchain:p
+      - name: Build diagnostic program
+        run: g++ -std=c++17 -O1 -o unc-fs-diag.exe scripts/unc-fs-diag.cpp
+      - name: Run on UNC, mapped-drive and local paths
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin;$env:PATH"
+          New-Item -ItemType Directory -Force -Path 'C:\unc-test\proj' | Out-Null
+          Set-Content -Path 'C:\unc-test\proj\use.scad' -Value 'cube(1);'
+          New-SmbShare -Name unctest -Path 'C:\unc-test\proj' -FullAccess Everyone | Out-Null
+          net use Z: '\\localhost\unctest' | Out-Host
+          $paths = @(
+            'C:\unc-test\proj\use.scad',
+            '\\localhost\unctest\use.scad',
+            '\\localhost\C$\unc-test\proj\use.scad',
+            '//localhost/unctest/use.scad',
+            'Z:\use.scad'
+          )
+          Write-Host '##### working directory C:\'
+          Set-Location 'C:\'
+          & "$env:GITHUB_WORKSPACE\unc-fs-diag.exe" @paths
+          Write-Host '##### working directory \\localhost\unctest (relative file name)'
+          Set-Location '\\localhost\unctest'
+          & "$env:GITHUB_WORKSPACE\unc-fs-diag.exe" 'use.scad'
+
   summary:
     needs: test
     if: ${{ always() }}
@@ -111,7 +163,7 @@ jobs:
       - name: Write summary
         shell: pwsh
         run: |
-          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined')
+          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined', 'fix1', 'all')
           $rows = @{}
           $details = @()
           foreach ($v in $variants) {
