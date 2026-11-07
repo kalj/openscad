@@ -1,0 +1,138 @@
+# Builds OpenSCAD with MSYS2/MinGW (the toolchain affected by
+# https://github.com/openscad/openscad/issues/5425) for master, each of the
+# candidate fix PRs and their combination, and runs each build on files
+# reached through local, UNC, mapped-drive and cross-drive paths.
+name: Windows UNC path test
+
+on:
+  push:
+    branches:
+      - windows-unc-test
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: master
+            refs: ''
+          - variant: pr-7004
+            refs: '7004'
+          - variant: pr-7151
+            refs: '7151'
+          - variant: pr-7187
+            refs: '7187'
+          - variant: combined
+            refs: '7004 7151 7187'
+    runs-on: windows-latest
+    name: ${{ matrix.variant }}
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout test harness
+        uses: actions/checkout@v7
+        with:
+          path: harness
+      - name: Checkout OpenSCAD master
+        uses: actions/checkout@v7
+        with:
+          repository: openscad/openscad
+          ref: master
+          path: src
+          fetch-depth: 0
+          submodules: recursive
+      - name: Merge PRs
+        if: ${{ matrix.refs != '' }}
+        shell: bash
+        working-directory: src
+        run: |
+          git config user.name "UNC test"
+          git config user.email "unc-test@invalid"
+          for pr in ${{ matrix.refs }}; do
+            git fetch -q origin "pull/$pr/head:pr-$pr"
+            git merge -q --no-edit "pr-$pr"
+            echo "merged #$pr at $(git rev-parse --short pr-$pr)"
+          done
+          git submodule update --init --recursive
+      - name: Record tested commit
+        shell: bash
+        working-directory: src
+        run: git log --oneline -1 | tee ../tested-commit.txt
+      - name: Calculate PACBOY_PACKAGES
+        shell: bash
+        working-directory: src
+        run: ./scripts/msys2-install-dependencies.sh qt5
+      - name: Setup MSYS2 Environment
+        uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: libxml2
+          pacboy: ${{ env.PACBOY_PACKAGES }}
+      - name: Build OpenSCAD
+        working-directory: src
+        run: |
+          mkdir build && cd build
+          cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF
+          cmake --build . --target openscad -j4
+      - name: Run UNC path tests
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin;$env:PATH"
+          ./harness/scripts/run-unc-tests.ps1 `
+            -Exe "$env:GITHUB_WORKSPACE\src\build\openscad.exe" `
+            -Variant '${{ matrix.variant }}' `
+            -OutDir "$env:GITHUB_WORKSPACE\unc-results"
+          Copy-Item tested-commit.txt unc-results/
+      - name: Upload results
+        uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: unc-results-${{ matrix.variant }}
+          path: unc-results
+
+  summary:
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@v7
+        with:
+          pattern: unc-results-*
+          path: results
+      - name: Write summary
+        shell: pwsh
+        run: |
+          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined')
+          $rows = @{}
+          $details = @()
+          foreach ($v in $variants) {
+            $f = "results/unc-results-$v/results.json"
+            if (-not (Test-Path $f)) { continue }
+            foreach ($r in (Get-Content -Raw $f | ConvertFrom-Json)) {
+              $key = "$($r.location) / $($r.case)"
+              if (-not $rows.ContainsKey($key)) { $rows[$key] = @{} }
+              $rows[$key][$v] = $r.status
+              if ($r.detail) { $details += "| $v | $key | ``$($r.detail -replace '\|', '\|')`` |" }
+            }
+          }
+          $md = @('## UNC path test results', '',
+                  "| location / case | $($variants -join ' | ') |",
+                  "|---|$(($variants | ForEach-Object { '---' }) -join '|')|")
+          foreach ($key in ($rows.Keys | Sort-Object)) {
+            $cells = $variants | ForEach-Object { if ($rows[$key][$_]) { $rows[$key][$_] } else { '—' } }
+            $md += "| $key | $($cells -join ' | ') |"
+          }
+          $md += @('', '### Tested commits', '')
+          foreach ($v in $variants) {
+            $c = "results/unc-results-$v/tested-commit.txt"
+            if (Test-Path $c) { $md += "- **$v**: $((Get-Content $c) -join ' ')" }
+          }
+          $md += @('', '### Messages', '', '| variant | location / case | first message |', '|---|---|---|')
+          $md += $details
+          $md -join "`n" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
