@@ -78,13 +78,16 @@ jobs:
         run: |
           mkdir build && cd build
           cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF -DUSE_QT6=OFF
-          cmake --build . --target openscad -j4
+          cmake --build . --target OpenSCADExe -j4
       - name: Run UNC path tests
         shell: pwsh
         run: |
           $env:PATH = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin;$env:PATH"
+          $exe = Get-ChildItem src\build -Filter 'openscad*.exe' | Select-Object -First 1
+          if (-not $exe) { throw "openscad*.exe not found in src\build" }
+          Write-Host "Testing $($exe.FullName)"
           ./harness/scripts/run-unc-tests.ps1 `
-            -Exe "$env:GITHUB_WORKSPACE\src\build\openscad.exe" `
+            -Exe $exe.FullName `
             -Variant '${{ matrix.variant }}' `
             -OutDir "$env:GITHUB_WORKSPACE\unc-results"
           Copy-Item tested-commit.txt unc-results/
