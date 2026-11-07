@@ -128,9 +128,14 @@ foreach ($locName in $Locations.Keys) {
                      else { 'OK' }
     # The most informative line: the exception, or the WARNING/ERROR message
     # (which shows how the file name is reported).
-    $line = ($all -split "`r?`n" | Where-Object {
-      $_ -match 'exception|terminate called|filesystem error|WARNING|ERROR|Can''t'
-    } | Select-Object -First 1)
+    # For a crash, the what() line names the failing filesystem call and path.
+    $lines = $all -split "`r?`n"
+    $line = ($lines | Where-Object { $_ -match 'what\(\)' } | Select-Object -First 1)
+    if (-not $line) {
+      $line = ($lines | Where-Object {
+        $_ -match 'exception|terminate called|filesystem error|WARNING|ERROR|Can''t'
+      } | Select-Object -First 1)
+    }
     $result.detail = if ($line) { $line.Trim() } elseif ($missing.Count -gt 0) { "missing: $($missing -join ', ')" } else { '' }
 
     Set-Content -Path (Join-Path $LogDir "$locName-$caseName.txt") -Value @(
