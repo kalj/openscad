@@ -77,7 +77,7 @@ jobs:
         working-directory: src
         run: |
           mkdir build && cd build
-          cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF
+          cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF -DUSE_QT6=OFF
           cmake --build . --target openscad -j4
       - name: Run UNC path tests
         shell: pwsh
