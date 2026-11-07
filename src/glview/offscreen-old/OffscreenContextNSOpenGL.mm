@@ -20,7 +20,7 @@ public:
   std::string getInfo() const override {
     std::ostringstream out;
     out << "GL context creator: NSOpenGL (old)\n"
-	<< "PNG generator: Core Foundation\n";
+	<< "PNG generator: lodepng\n";
     return out.str();
   }
 
