@@ -31,6 +31,12 @@ jobs:
             refs: 'kalj:do-export-cwd'
           - variant: all
             refs: '7004 7151 7187 kalj:do-export-cwd'
+          # The upstream UNC CTest tests (kalj:unc-nocrash-tests): expected to fail on master
+          # and pass with the four fixes (#7194 is fix1).
+          - variant: tests-master
+            refs: 'kalj:unc-nocrash-tests'
+          - variant: tests-all
+            refs: '7004 7151 7187 7194 kalj:unc-nocrash-tests'
     runs-on: windows-latest
     name: ${{ matrix.variant }}
     defaults:
@@ -89,7 +95,7 @@ jobs:
         run: |
           mkdir build && cd build
           cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF -DUSE_QT6=OFF
-          cmake --build . --target OpenSCADExe -j4
+          cmake --build . --target OpenSCADExe winconsole -j4
       - name: Run UNC path tests
         shell: pwsh
         run: |
@@ -102,6 +108,12 @@ jobs:
             -Variant '${{ matrix.variant }}' `
             -OutDir "$env:GITHUB_WORKSPACE\unc-results"
           Copy-Item tested-commit.txt unc-results/
+      - name: Run UNC CTest tests
+        if: ${{ startsWith(matrix.variant, 'tests-') }}
+        working-directory: src/build
+        run: |
+          mkdir -p ../../unc-results
+          ctest -C Default -R unc-nocrash --output-on-failure 2>&1 | tee ../../unc-results/ctest.txt || true
       - name: Upload results
         uses: actions/upload-artifact@v7
         if: ${{ always() }}
@@ -163,7 +175,7 @@ jobs:
       - name: Write summary
         shell: pwsh
         run: |
-          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined', 'fix1', 'all')
+          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined', 'fix1', 'all', 'tests-master', 'tests-all')
           $rows = @{}
           $details = @()
           foreach ($v in $variants) {
@@ -187,6 +199,14 @@ jobs:
           foreach ($v in $variants) {
             $c = "results/unc-results-$v/tested-commit.txt"
             if (Test-Path $c) { $md += "- **$v**: $((Get-Content $c) -join ' ')" }
+          }
+          $md += @('', '### UNC CTest tests', '')
+          foreach ($v in $variants) {
+            $c = "results/unc-results-$v/ctest.txt"
+            if (Test-Path $c) {
+              $lines = Get-Content $c | Where-Object { $_ -match 'Test +#|tests passed|tests failed' }
+              $md += @("**$v**", '', '```') + $lines + @('```', '')
+            }
           }
           $md += @('', '### Messages', '', '| variant | location / case | first message |', '|---|---|---|')
           $md += $details
