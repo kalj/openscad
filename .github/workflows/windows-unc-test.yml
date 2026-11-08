@@ -96,6 +96,8 @@ jobs:
           mkdir build && cd build
           cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF -DUSE_QT6=OFF
           cmake --build . --target OpenSCADExe winconsole -j4
+          # The tests run openscad.com from the build folder, where 'cmake --install' would put it.
+          cp winconsole/openscad*.com .
       - name: Run UNC path tests
         shell: pwsh
         run: |
