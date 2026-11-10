@@ -2,6 +2,8 @@
 
 Test harness for [openscad/openscad#5425](https://github.com/openscad/openscad/issues/5425):
 OpenSCAD built with MSYS2/MinGW fails on files opened through UNC paths.
+It also covers [openscad/openscad#7198](https://github.com/openscad/openscad/issues/7198):
+`use <>` and `include <>` fail when the folder name has non-ASCII characters.
 
 The workflow builds OpenSCAD with MSYS2 UCRT64 on `windows-latest` for:
 
@@ -14,9 +16,16 @@ The workflow builds OpenSCAD with MSYS2 UCRT64 on `windows-latest` for:
 - `fix1`: [kalj:do-export-cwd](https://github.com/kalj/openscad/tree/do-export-cwd), which stops
   command-line runs aborting when `do_export()` can't change the working directory
 - `all`: the three PRs plus `fix1`
+- `tests-master`, `tests-all`: the UNC CTest tests from
+  [kalj:unc-nocrash-tests](https://github.com/kalj/openscad/tree/unc-nocrash-tests), without and with the fixes
+- `utf8-ctype`: [kalj:win-utf8-ctype](https://github.com/kalj/openscad/tree/win-utf8-ctype), an
+  experimental fix for #7198 that calls `setlocale(LC_CTYPE, ".UTF-8")` on Windows so `fopen()`
+  reads file names as UTF-8
+- `all-utf8`: the open UNC fixes plus `utf8-ctype`
 
 Each build then runs `openscad.exe -o out.echo` on small test files (`use <>`,
-`include <>`, a warning and a syntax error) reached through:
+`include <>`, a warning, a syntax error, and `use <>` of a file named `dummyö.scad`)
+reached through:
 
 | location | path |
 |---|---|
@@ -26,10 +35,16 @@ Each build then runs `openscad.exe -o out.echo` on small test files (`use <>`,
 | `unc-cwd` | relative file name, working directory `\\localhost\unctest` |
 | `mapped` | `Z:\...`, with `Z:` mapped to `\\localhost\unctest` |
 | `cross-drive` | `D:\unc-test\proj\...`, working directory `C:\` |
+| `nonascii` | `C:\unc-test\pröj\...` |
+| `nonascii-cwd` | relative file name, working directory `C:\unc-test\pröj` (the #7198 case, without a non-ASCII command-line argument) |
+| `nonascii-unc` | `\\localhost\C$\unc-test\pröj\...` |
 
 Each run is reported as `OK`, `FAIL` (expected output missing), `CRASH`
 (exception or abort) or `SKIPPED`. The summary job collects the results into a
 table on the workflow run page; full logs are in the `unc-results-*` artifacts.
+The summary also says whether each build initialized localization: without a
+`locale` folder next to the exe, OpenSCAD never calls `setlocale(LC_ALL, "")`,
+which affects how `fopen()` treats non-ASCII file names.
 
 The branch only contains this harness, so pushing it doesn't run any of the
 project's other workflows. Run it again with "Run workflow" on the Actions tab.

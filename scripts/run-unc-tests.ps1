@@ -1,6 +1,8 @@
 # Runs openscad.exe on small test projects reached through local, UNC,
-# mapped-drive and cross-drive paths, and records whether each run succeeds,
-# fails or crashes. See https://github.com/openscad/openscad/issues/5425.
+# mapped-drive and cross-drive paths, and from folders with non-ASCII names,
+# and records whether each run succeeds, fails or crashes. See
+# https://github.com/openscad/openscad/issues/5425 and
+# https://github.com/openscad/openscad/issues/7198.
 #
 # Results are written to <OutDir>/results.json, and the full output of each
 # run to <OutDir>/logs/.
@@ -19,12 +21,19 @@ New-Item -ItemType Directory -Force -Path $EchoDir | Out-Null
 
 # --- Test files ----------------------------------------------------------
 
+# Non-ASCII characters are built from code points so this script's own
+# encoding doesn't matter.
+$oe = [string][char]0x00F6   # o with diaeresis, as in #7198
+$NonAsciiLib = "dummy$oe.scad"
+
 $Files = [ordered]@{
   'dummy1.scad'  = 'module create_cube() { echo("create_cube called"); cube(10, center=true); }'
   'use.scad'     = "use <dummy1.scad>`ncreate_cube();`necho(`"main done`");"
   'include.scad' = "include <dummy1.scad>`ncreate_cube();`necho(`"main done`");"
   'warning.scad' = "echo(undefined_variable);`necho(`"main done`");"
   'error.scad'   = "echo(`"main done`");`nx"
+  $NonAsciiLib   = 'module create_cube2() { echo("create_cube2 called"); cube(10, center=true); }'
+  'use-nonascii-name.scad' = "use <$NonAsciiLib>`ncreate_cube2();`necho(`"main done`");"
 }
 
 # Case name -> file to open, and the patterns all of which must appear in the
@@ -34,19 +43,24 @@ $Cases = [ordered]@{
   'include' = @{ File = 'include.scad'; Expect = @('ECHO: "create_cube called"', 'ECHO: "main done"') }
   'warning' = @{ File = 'warning.scad'; Expect = @('Ignoring unknown variable', 'warning.scad, line 1', 'ECHO: "main done"') }
   'error'   = @{ File = 'error.scad';   Expect = @('Parser error', 'error.scad, line') }
+  # The used file's own name is non-ASCII.
+  'use-nonascii-name' = @{ File = 'use-nonascii-name.scad'; Expect = @('ECHO: "create_cube2 called"', 'ECHO: "main done"') }
 }
 
 function New-TestProject([string]$Dir) {
   New-Item -ItemType Directory -Force -Path $Dir | Out-Null
   foreach ($name in $Files.Keys) {
-    Set-Content -Path (Join-Path $Dir $name) -Value $Files[$name] -NoNewline
+    Set-Content -Path (Join-Path $Dir $name) -Value $Files[$name] -NoNewline -Encoding utf8NoBOM
   }
 }
 
 $LocalDir = 'C:\unc-test\proj'
 $OtherDriveDir = 'D:\unc-test\proj'
+# A folder with a non-ASCII name, as in #7198.
+$NonAsciiDir = "C:\unc-test\pr${oe}j"
 New-TestProject $LocalDir
 New-TestProject $OtherDriveDir
+New-TestProject $NonAsciiDir
 
 # --- Locations -----------------------------------------------------------
 
@@ -76,6 +90,9 @@ $Locations = [ordered]@{
   'unc-cwd'     = @{ Dir = '\\localhost\unctest';          Cwd = '\\localhost\unctest';  Relative = $true;  Available = $shareOk }
   'mapped'      = @{ Dir = 'Z:\';                           Cwd = 'C:\';                  Relative = $false; Available = $mappedOk }
   'cross-drive' = @{ Dir = $OtherDriveDir;                  Cwd = 'C:\';                  Relative = $false; Available = $true }
+  'nonascii'     = @{ Dir = $NonAsciiDir;                   Cwd = 'C:\';                  Relative = $false; Available = $true }
+  'nonascii-cwd' = @{ Dir = $NonAsciiDir;                   Cwd = $NonAsciiDir;           Relative = $true;  Available = $true }
+  'nonascii-unc' = @{ Dir = "\\localhost\C`$\unc-test\pr${oe}j"; Cwd = 'C:\';       Relative = $false; Available = $true }
 }
 
 # --- Running openscad ----------------------------------------------------
@@ -104,7 +121,7 @@ foreach ($locName in $Locations.Keys) {
   foreach ($caseName in $Cases.Keys) {
     $case = $Cases[$caseName]
     $result = [ordered]@{ variant = $Variant; location = $locName; case = $caseName;
-                          status = ''; exit = ''; detail = '' }
+                          status = ''; exit = ''; detail = ''; localization = '' }
     if (-not $loc.Available -or -not (Test-Path (Join-Path $loc.Dir $case.File))) {
       $result.status = 'SKIPPED'
       $result.detail = 'location not available on this runner'
@@ -122,6 +139,9 @@ foreach ($locName in $Locations.Keys) {
     $missing = @($case.Expect | Where-Object { -not $all.Contains($_) })
     $crash = $all -match 'exception|terminate called|filesystem error'
     $result.exit = "$($run.Exit)"
+    # Without a locale folder next to the exe, openscad never calls
+    # setlocale(LC_ALL, ""), which changes how fopen() treats file names.
+    $result.localization = if ($all.Contains('Could not initialize localization')) { 'off' } else { 'on' }
     $result.status = if ("$($run.Exit)" -eq 'timeout') { 'TIMEOUT' }
                      elseif ($crash) { 'CRASH' }
                      elseif ($missing.Count -gt 0) { 'FAIL' }
