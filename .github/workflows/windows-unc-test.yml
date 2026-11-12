@@ -48,6 +48,9 @@ jobs:
           # support: open use<>/include<> files through wide-character paths.
           - variant: wide-open
             refs: 'kalj:win-wide-open'
+          # #7207 without its SourceFileCache.cc change (plain std::ifstream(filename)), as asked in review.
+          - variant: wide-no-sfc
+            refs: 'kalj:win-wide-open-no-sfc'
     runs-on: windows-latest
     name: ${{ matrix.variant }}
     defaults:
@@ -188,7 +191,7 @@ jobs:
       - name: Write summary
         shell: pwsh
         run: |
-          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined', 'fix1', 'all', 'tests-master', 'tests-all', 'utf8-ctype', 'all-utf8', 'wide-open')
+          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined', 'fix1', 'all', 'tests-master', 'tests-all', 'utf8-ctype', 'all-utf8', 'wide-open', 'wide-no-sfc')
           $rows = @{}
           $details = @()
           foreach ($v in $variants) {
