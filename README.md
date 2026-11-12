@@ -18,14 +18,10 @@ The workflow builds OpenSCAD with MSYS2 UCRT64 on `windows-latest` for:
 - `all`: the three PRs plus `fix1`
 - `tests-master`, `tests-all`: the UNC CTest tests from
   [kalj:unc-nocrash-tests](https://github.com/kalj/openscad/tree/unc-nocrash-tests), without and with the fixes
-- `utf8-ctype`: [kalj:win-utf8-ctype](https://github.com/kalj/openscad/tree/win-utf8-ctype), an
-  experimental fix for #7198 that calls `setlocale(LC_CTYPE, ".UTF-8")` on Windows so `fopen()`
-  reads file names as UTF-8
-- `all-utf8`: the open UNC fixes plus `utf8-ctype`
-- `wide-open`: [kalj:win-wide-open](https://github.com/kalj/openscad/tree/win-wide-open), an
-  alternative fix for #7198 that opens `use <>` and `include <>` files through wide-character
-  paths, so it doesn't depend on the C runtime supporting a UTF-8 locale (the release builds
-  use MXE, not UCRT64)
+- `wide-open`: [kalj:win-wide-open](https://github.com/kalj/openscad/tree/win-wide-open)
+  (#7207), the fix for #7198 that opens `use <>` and `include <>` files through wide-character
+  paths
+- `wide-no-sfc`: #7207 without its `SourceFileCache.cc` change, to show that change is needed
 
 Each build then runs `openscad.exe -o out.echo` on small test files (`use <>`,
 `include <>`, a warning, a syntax error, and `use <>` of a file named `dummyö.scad`)
