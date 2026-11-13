@@ -24,28 +24,15 @@ jobs:
             refs: '7004'
           - variant: pr-7151
             refs: '7151'
-          - variant: pr-7187
-            refs: '7187'
+          # Master already has #7187, #7194 and #7207 (the non-ASCII path fix for #7198).
           - variant: combined
-            refs: '7004 7151 7187'
-          # Fix 1: don't abort when do_export() can't change the working directory.
-          - variant: fix1
-            refs: 'kalj:do-export-cwd'
-          - variant: all
-            refs: '7004 7151 7187 kalj:do-export-cwd'
+            refs: '7004 7151'
           # The upstream UNC CTest tests (kalj:unc-nocrash-tests): expected to fail on master
-          # and pass with the four fixes (#7194 is fix1).
+          # and pass with the remaining fixes.
           - variant: tests-master
             refs: 'kalj:unc-nocrash-tests'
           - variant: tests-all
-            refs: '7004 7151 7187 7194 kalj:unc-nocrash-tests'
-          # Fix for #7198 (non-ASCII folder names), #7207: open use<>/include<> files
-          # through wide-character paths.
-          - variant: wide-open
-            refs: 'kalj:win-wide-open'
-          # #7207 without its SourceFileCache.cc change (plain std::ifstream(filename)), as asked in review.
-          - variant: wide-no-sfc
-            refs: 'kalj:win-wide-open-no-sfc'
+            refs: '7004 7151 kalj:unc-nocrash-tests'
     runs-on: windows-latest
     name: ${{ matrix.variant }}
     defaults:
@@ -186,7 +173,7 @@ jobs:
       - name: Write summary
         shell: pwsh
         run: |
-          $variants = @('master', 'pr-7004', 'pr-7151', 'pr-7187', 'combined', 'fix1', 'all', 'tests-master', 'tests-all', 'wide-open', 'wide-no-sfc')
+          $variants = @('master', 'pr-7004', 'pr-7151', 'combined', 'tests-master', 'tests-all')
           $rows = @{}
           $details = @()
           foreach ($v in $variants) {

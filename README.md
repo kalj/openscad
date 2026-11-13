@@ -7,21 +7,16 @@ It also covers [openscad/openscad#7198](https://github.com/openscad/openscad/iss
 
 The workflow builds OpenSCAD with MSYS2 UCRT64 on `windows-latest` for:
 
-- `master`
-- each candidate fix merged into master:
+- `master`, which already includes the merged fixes
+  [#7187](https://github.com/openscad/openscad/pull/7187),
+  [#7194](https://github.com/openscad/openscad/pull/7194) and
+  [#7207](https://github.com/openscad/openscad/pull/7207) (non-ASCII paths, #7198)
+- each remaining candidate fix merged into master:
   [#7004](https://github.com/openscad/openscad/pull/7004),
-  [#7151](https://github.com/openscad/openscad/pull/7151),
-  [#7187](https://github.com/openscad/openscad/pull/7187)
-- all three merged together (`combined`)
-- `fix1`: [kalj:do-export-cwd](https://github.com/kalj/openscad/tree/do-export-cwd), which stops
-  command-line runs aborting when `do_export()` can't change the working directory
-- `all`: the three PRs plus `fix1`
+  [#7151](https://github.com/openscad/openscad/pull/7151)
+- both merged together (`combined`)
 - `tests-master`, `tests-all`: the UNC CTest tests from
   [kalj:unc-nocrash-tests](https://github.com/kalj/openscad/tree/unc-nocrash-tests), without and with the fixes
-- `wide-open`: [kalj:win-wide-open](https://github.com/kalj/openscad/tree/win-wide-open)
-  (#7207), the fix for #7198 that opens `use <>` and `include <>` files through wide-character
-  paths
-- `wide-no-sfc`: #7207 without its `SourceFileCache.cc` change, to show that change is needed
 
 Each build then runs `openscad.exe -o out.echo` on small test files (`use <>`,
 `include <>`, a warning, a syntax error, and `use <>` of a file named `dummyö.scad`)
