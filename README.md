@@ -15,6 +15,8 @@ The workflow builds OpenSCAD with MSYS2 UCRT64 on `windows-latest` for:
   [#7004](https://github.com/openscad/openscad/pull/7004),
   [#7151](https://github.com/openscad/openscad/pull/7151)
 - both merged together (`combined`)
+- `unc-helpers`: [kalj:unc-path-helpers](https://github.com/kalj/openscad/tree/unc-path-helpers),
+  which keeps UNC paths intact when resolving `use <>` and `include <>`
 - `tests-master`, `tests-all`: the UNC CTest tests from
   [kalj:unc-nocrash-tests](https://github.com/kalj/openscad/tree/unc-nocrash-tests), without and with the fixes
 

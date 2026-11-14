@@ -33,6 +33,9 @@ jobs:
             refs: 'kalj:unc-nocrash-tests'
           - variant: tests-all
             refs: '7004 7151 kalj:unc-nocrash-tests'
+          # UNC-aware path helpers, so use<>/include<> work from UNC paths (#5425).
+          - variant: unc-helpers
+            refs: 'kalj:unc-path-helpers'
     runs-on: windows-latest
     name: ${{ matrix.variant }}
     defaults:
@@ -173,7 +176,7 @@ jobs:
       - name: Write summary
         shell: pwsh
         run: |
-          $variants = @('master', 'pr-7004', 'pr-7151', 'combined', 'tests-master', 'tests-all')
+          $variants = @('master', 'pr-7004', 'pr-7151', 'combined', 'tests-master', 'tests-all', 'unc-helpers')
           $rows = @{}
           $details = @()
           foreach ($v in $variants) {
