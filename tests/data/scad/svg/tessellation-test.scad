@@ -13,10 +13,11 @@ module cap_slice() {
 
 // When $fn, $fa and $fs all have their default values, the fixed segment counts of
 // OpenSCAD 2021.01 are used (40 per circle, 20 per Bezier, |angle|/18+4 per arc).
-// Otherwise segment counts match circle() with the same radius in mm.
+// Otherwise segment counts match circle() with the same radius in mm, but without
+// $fn they never go below the 2021.01 counts ($fa/$fs can only refine).
 
 // Column 1: <circle> (r=10mm)
-// Row 0: default (40 segs), Row 1: $fn=60, Row 2: $fa=3 (120 segs), Row 3: $fs=8 (8 segs)
+// Row 0: default (40 segs), Row 1: $fn=60, Row 2: $fa=3 (120 segs), Row 3: $fs=8 (40 segs)
 translate([0, 0])  cap_slice() import(svg_circle, center=true);
 translate([0, 5])  cap_slice() import(svg_circle, center=true, $fn=60);
 translate([0, 10]) cap_slice() import(svg_circle, center=true, $fa=3, $fs=0.1);

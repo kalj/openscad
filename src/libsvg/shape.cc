@@ -324,6 +324,7 @@ void shape::draw_ellipse(path_t& path, double x, double y, double rx, double ry,
   if (!fValues->legacy_segments) {
     const double rmax = fmax(rx, ry) * get_mm_per_unit(fValues);
     fn = fValues->getCircularSegmentCount(rmax, 360.0).value_or(3);
+    if (fValues->legacy_minimum) fn = std::max(fn, 40ul);
   }
   for (unsigned long idx = 1; idx <= fn; ++idx) {
     const double a = idx * 360.0 / fn;

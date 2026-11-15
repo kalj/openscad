@@ -39,6 +39,11 @@ public:
   bool isDefault() const { return fn == 0.0 && fe == 0.0 && fa == 12.0 && fs == 2.0; }
 
   /**
+   * Returns true if $fn is set, i.e. the segment count is given explicitly.
+   */
+  bool usesFn() const { return fn > 0.0; }
+
+  /**
    * Calculate segments for a circle or circular arc.
    */
   std::optional<int> getCircularSegmentCount(double r, double angle_degrees = 360.0) const;

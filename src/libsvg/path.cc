@@ -108,9 +108,10 @@ int path::bezier_segment_count(const std::vector<Eigen::Vector2d>& points, const
   }
   const double chord = (points.back() - points.front()).norm();
   const double length = (chord + polygon_length) / 2.0 * get_mm_per_unit(ctx);
-  if (turning < 1e-6 || length <= 0.0) return 1;
+  if (turning < 1e-6 || length <= 0.0) return ctx->legacy_minimum ? 20 : 1;
   const double radius = length / (turning * M_PI / 180.0);
-  return ctx->getCircularSegmentCount(radius, turning).value_or(1);
+  const int n = ctx->getCircularSegmentCount(radius, turning).value_or(1);
+  return ctx->legacy_minimum ? std::max(n, 20) : n;
 }
 
 void path::arc_to(path_t& path, double x1, double y1, double rx, double ry, double x2, double y2,
@@ -164,12 +165,13 @@ void path::arc_to(path_t& path, double x1, double y1, double rx, double ry, doub
     delta -= 360;
   }
 
-  unsigned int steps;
-  if (fValues->legacy_segments) {
-    steps = static_cast<unsigned int>(std::fabs(delta) * 10.0 / 180 + 4);  // OpenSCAD 2021.01
-  } else {
+  // OpenSCAD 2021.01
+  const auto legacy_steps = static_cast<unsigned int>(std::fabs(delta) * 10.0 / 180 + 4);
+  unsigned int steps = legacy_steps;
+  if (!fValues->legacy_segments) {
     const double rmax = std::max(rx, ry) * get_mm_per_unit(fValues);
     steps = fValues->getCircularSegmentCount(rmax, delta).value_or(1);
+    if (fValues->legacy_minimum) steps = std::max(steps, legacy_steps);
   }
   for (unsigned int a = 0; a <= steps; ++a) {
     double phi = theta + delta * a / steps;

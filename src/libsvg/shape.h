@@ -67,6 +67,9 @@ struct fnContext {
   // Use the fixed segment counts of OpenSCAD 2021.01 (used when $fn/$fa/$fs are all at
   // their defaults, so existing designs keep their geometry).
   bool legacy_segments{false};
+  // When $fn isn't set, never use fewer segments than OpenSCAD 2021.01, so that
+  // $fa/$fs can only refine and the result is continuous around the defaults.
+  bool legacy_minimum{false};
 
 private:
   std::atomic<int> matches{0};
