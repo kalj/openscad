@@ -320,8 +320,11 @@ double shape::get_mm_per_unit(const fnContext *ctx)
 void shape::draw_ellipse(path_t& path, double x, double y, double rx, double ry, void *context)
 {
   const auto *fValues = reinterpret_cast<const fnContext *>(context);
-  const double rmax = fmax(rx, ry) * get_mm_per_unit(fValues);
-  const unsigned long fn = fValues->getCircularSegmentCount(rmax, 360.0).value_or(3);
+  unsigned long fn = 40;  // OpenSCAD 2021.01
+  if (!fValues->legacy_segments) {
+    const double rmax = fmax(rx, ry) * get_mm_per_unit(fValues);
+    fn = fValues->getCircularSegmentCount(rmax, 360.0).value_or(3);
+  }
   for (unsigned long idx = 1; idx <= fn; ++idx) {
     const double a = idx * 360.0 / fn;
     const double xx = rx * sin_degrees(a) + x;

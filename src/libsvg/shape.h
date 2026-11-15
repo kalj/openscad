@@ -64,6 +64,9 @@ struct fnContext {
   std::function<double(const libsvg::svgpage&)> page_unit_scale;
   // Size of one user unit of the root page in mm, set when the root <svg> is parsed.
   double unit_scale{1.0};
+  // Use the fixed segment counts of OpenSCAD 2021.01 (used when $fn/$fa/$fs are all at
+  // their defaults, so existing designs keep their geometry).
+  bool legacy_segments{false};
 
 private:
   std::atomic<int> matches{0};

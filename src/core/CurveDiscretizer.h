@@ -33,6 +33,12 @@ public:
   CurveDiscretizer(std::function<std::optional<double>(const char *)> valueLookup);
 
   /**
+   * Returns true if $fn, $fa, $fs (and $fe) all have their default values,
+   * i.e. the user did not ask for a specific resolution.
+   */
+  bool isDefault() const { return fn == 0.0 && fe == 0.0 && fa == 12.0 && fs == 2.0; }
+
+  /**
    * Calculate segments for a circle or circular arc.
    */
   std::optional<int> getCircularSegmentCount(double r, double angle_degrees = 360.0) const;

@@ -138,6 +138,7 @@ std::unique_ptr<Polygon2d> import_svg(CurveDiscretizer discretizer, const std::s
   try {
     fnContext scadContext(
       [&discretizer](double r, double angle) { return discretizer.getCircularSegmentCount(r, angle); });
+    scadContext.legacy_segments = discretizer.isDefault();
     // Curves are tessellated while parsing, in SVG user units. Tell the parser how big a
     // user unit is in mm, so that $fs and the radius used for $fn/$fa/$fs are in mm.
     scadContext.page_unit_scale = [dpi](const libsvg::svgpage& page) {

@@ -90,6 +90,8 @@ static double vector_angle(double ux, double uy, double vx, double vy)
  */
 int path::bezier_segment_count(const std::vector<Eigen::Vector2d>& points, const fnContext *ctx)
 {
+  if (ctx->legacy_segments) return 20;  // OpenSCAD 2021.01
+
   double polygon_length = 0.0;
   double turning = 0.0;  // degrees
   Eigen::Vector2d prev_dir{0, 0};
@@ -162,8 +164,13 @@ void path::arc_to(path_t& path, double x1, double y1, double rx, double ry, doub
     delta -= 360;
   }
 
-  const double rmax = std::max(rx, ry) * get_mm_per_unit(fValues);
-  const unsigned int steps = fValues->getCircularSegmentCount(rmax, delta).value_or(1);
+  unsigned int steps;
+  if (fValues->legacy_segments) {
+    steps = static_cast<unsigned int>(std::fabs(delta) * 10.0 / 180 + 4);  // OpenSCAD 2021.01
+  } else {
+    const double rmax = std::max(rx, ry) * get_mm_per_unit(fValues);
+    steps = fValues->getCircularSegmentCount(rmax, delta).value_or(1);
+  }
   for (unsigned int a = 0; a <= steps; ++a) {
     double phi = theta + delta * a / steps;
 
