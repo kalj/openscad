@@ -11,15 +11,15 @@ module cap_slice() {
   }
 }
 
-// Column 1: <circle> (r=10mm, minimum 40 segments -> 4 facets in cap)
-// Row 0: default (40 segs), Row 1: $fn=60, Row 2: $fa=3 (120 segs), Row 3: $fs=8 (79 segs)
+// Column 1: <circle> (r=10mm; segment counts match circle(r=10))
+// Row 0: default (30 segs), Row 1: $fn=60, Row 2: $fa=3 (120 segs), Row 3: $fs=8 (8 segs)
 translate([0, 0])  cap_slice() import(svg_circle, center=true);
 translate([0, 5])  cap_slice() import(svg_circle, center=true, $fn=60);
 translate([0, 10]) cap_slice() import(svg_circle, center=true, $fa=3, $fs=0.1);
 translate([0, 15]) cap_slice() import(svg_circle, center=true, $fa=0.1, $fs=8);
 
 // Column 2: <path> elliptical arc (id="id-circle", rotated -90 deg so outer arc apex is at y = +10)
-// Note: default has 9 steps per 90-deg arc (10 deg/step -> 3-4 facets in cap)
+// Note: segment counts are those of a circle with the arc's radius, scaled to the arc's angle
 module arc_r10() {
   scale([10 / 13.9588, 10 / 13.9588])
     rotate(-90)
@@ -31,7 +31,7 @@ translate([8, 10]) cap_slice() arc_r10($fn=0,  $fa=3,   $fs=0.1);
 translate([8, 15]) cap_slice() arc_r10($fn=0,  $fa=0.1, $fs=1.3);
 
 // Column 3: <path> cubic Bezier (outer rounded corner of simple.svg, rotated -45 deg so apex is at y = 5*sqrt(2)+5 = 12.071)
-// Note: 1 cubic Bezier spans 90 deg (default 20 segs = 4.5 deg/seg -> 4 facets in cap y in [11.96, 12.071]).
+// Note: 1 cubic Bezier spans 90 deg and gets the same segment count as a 90 deg arc of the same length.
 module bezier_corner_slice() {
   scale([2.6, 34]) intersection() {
     translate([0, -11.96])

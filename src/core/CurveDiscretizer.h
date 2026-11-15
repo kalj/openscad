@@ -38,12 +38,6 @@ public:
   std::optional<int> getCircularSegmentCount(double r, double angle_degrees = 360.0) const;
 
   /**
-   * @brief Calculate segments for a path.
-   * Currently only uses $fn.
-   */
-  int getPathSegmentCount() const { return std::max(static_cast<int>(fn), 3); }
-
-  /**
    * Returns the number of slices for a linear_extrude with twist.
    *
    * @param r_sqr Largest 2D delta from origin of all vertices, squared.
