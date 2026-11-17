@@ -80,7 +80,7 @@ jobs:
       - name: Calculate PACBOY_PACKAGES
         shell: bash
         working-directory: src
-        run: ./scripts/msys2-install-dependencies.sh qt5
+        run: ./scripts/msys2-install-dependencies.sh
       - name: Setup MSYS2 Environment
         uses: msys2/setup-msys2@v2
         id: msys2
@@ -93,7 +93,7 @@ jobs:
         working-directory: src
         run: |
           mkdir build && cd build
-          cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF -DUSE_QT6=OFF
+          cmake .. -G"Ninja" -DCMAKE_BUILD_TYPE=Release -DEXPERIMENTAL=OFF
           cmake --build . --target OpenSCADExe winconsole -j4
           # The tests run openscad.com from the build folder, where 'cmake --install' would put it.
           cp winconsole/openscad*.com .
