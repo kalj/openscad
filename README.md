@@ -8,13 +8,12 @@ It also covers [openscad/openscad#7198](https://github.com/openscad/openscad/iss
 The workflow builds OpenSCAD with MSYS2 UCRT64 on `windows-latest` for:
 
 - `master`, which already includes the merged fixes
+  [#7151](https://github.com/openscad/openscad/pull/7151),
   [#7187](https://github.com/openscad/openscad/pull/7187),
   [#7194](https://github.com/openscad/openscad/pull/7194) and
   [#7207](https://github.com/openscad/openscad/pull/7207) (non-ASCII paths, #7198)
-- each remaining candidate fix merged into master:
-  [#7004](https://github.com/openscad/openscad/pull/7004),
-  [#7151](https://github.com/openscad/openscad/pull/7151)
-- both merged together (`combined`)
+- `pr-7004`: the remaining candidate fix
+  [#7004](https://github.com/openscad/openscad/pull/7004) merged into master
 - `unc-helpers`: [kalj:unc-path-helpers](https://github.com/kalj/openscad/tree/unc-path-helpers),
   which keeps UNC paths intact when resolving `use <>` and `include <>`
 - `tests-master`, `tests-all`: the UNC CTest tests from
