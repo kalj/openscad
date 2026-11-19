@@ -5,6 +5,8 @@ name: Windows installer test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ windows-installer-test ]
 
 jobs:
   installer:
