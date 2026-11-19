@@ -475,7 +475,7 @@ private:
   ExportPdfPaperOrientation orientationsString2Enum(const QString& current);
 
   QMenu *navigationMenu{nullptr};
-  QSoundEffect *renderCompleteSoundEffect;
+  QSoundEffect *renderCompleteSoundEffect{nullptr};
 
   void resetMeasurementsState(bool enable, const QString& tooltipMessage);
   QActionGroup *measurementGroup;

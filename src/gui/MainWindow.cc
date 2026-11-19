@@ -2085,6 +2085,12 @@ void MainWindow::actionRenderDone(const std::shared_ptr<const Geometry>& root_ge
   const uint soundThreshold =
     GlobalPreferences::inst()->getValue("advanced/timeThresholdOnRenderCompleteSound").toUInt();
   if (renderSoundEnabled && soundThreshold <= renderStatistic.ms().count() / 1000) {
+    // Created on first use: setting up the sound initializes Qt's multimedia backend,
+    // which can be slow and loads audio and GPU libraries (#7205).
+    if (!renderCompleteSoundEffect) {
+      renderCompleteSoundEffect = new QSoundEffect(this);
+      renderCompleteSoundEffect->setSource(QUrl("qrc:/sounds/complete.wav"));
+    }
     renderCompleteSoundEffect->play();
   }
 
@@ -3515,9 +3521,6 @@ void MainWindow::setupWindow()
  */
 void MainWindow::setupCoreSubsystems()
 {
-  renderCompleteSoundEffect = new QSoundEffect(this);
-  renderCompleteSoundEffect->setSource(QUrl("qrc:/sounds/complete.wav"));
-
   this->geometryWorker = new GeometryWorker();
   connect(this->geometryWorker, &GeometryWorker::done, this, &MainWindow::actionRenderDone);
 
