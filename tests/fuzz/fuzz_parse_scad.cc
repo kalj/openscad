@@ -1,14 +1,20 @@
 // Parses (but does not evaluate) the input as an OpenSCAD source file.
+#include <filesystem>
+
 #include "core/SourceFile.h"
 #include "core/parsersettings.h"
 #include "fuzz_common.h"
+#include "platform/PlatformUtils.h"
+
+namespace fs = std::filesystem;
 
 bool parse(SourceFile *& file, const std::string& text, const std::string& filename,
            const std::string& mainFile, int debug);
 
-extern "C" int LLVMFuzzerInitialize(int *, char ***)
+extern "C" int LLVMFuzzerInitialize(int *argc, char ***argv)
 {
   fuzz_init();
+  PlatformUtils::registerApplicationPath(fs::absolute(fs::path((*argv)[0])).parent_path().generic_string());
   parser_init();
   return 0;
 }
