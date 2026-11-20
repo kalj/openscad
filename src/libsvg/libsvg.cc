@@ -212,13 +212,15 @@ private:
 
 int streamFile(const char *filename, void *context)
 {
-  xmlTextReaderPtr reader;
   // The temp storage is needed for items in a def that don't have an id, but have a parent with an id
   shapes_list_t temp_defs_storage;
   shapes_defs_list_t defs_lookup_list;
 
   in_defs = false;
-  reader = xmlNewTextReaderFilename(filename);
+  // Also freed when processNode() throws.
+  const std::unique_ptr<xmlTextReader, decltype(&xmlFreeTextReader)> reader_ptr(
+    xmlNewTextReaderFilename(filename), &xmlFreeTextReader);
+  xmlTextReaderPtr reader = reader_ptr.get();
   if (reader != nullptr) {
     // Disable expansion of XML entities and external loading.
     xmlTextReaderSetParserProp(reader, XML_PARSER_SUBST_ENTITIES, 0);
@@ -230,7 +232,6 @@ int streamFile(const char *filename, void *context)
       processNode(reader, &defs_lookup_list, &temp_defs_storage, context);
       ret = xmlTextReaderRead(reader);
     }
-    xmlFreeTextReader(reader);
     if (ret != 0) {
       throw SvgException((boost::format("Error parsing file '%1%'") % filename).str());
     }
