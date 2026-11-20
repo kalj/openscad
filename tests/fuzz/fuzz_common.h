@@ -4,11 +4,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <string>
 
 #include <unistd.h>
 
 #include "core/AST.h"
+#include "core/CurveDiscretizer.h"
 #include "utils/printutils.h"
 
 static const Location fuzz_location{0, 0, 0, 0, nullptr};
@@ -28,6 +30,12 @@ static std::string fuzz_write_file(const uint8_t *data, size_t size, const char 
   return path;
 }
 
+// Default $fn, $fs, $fa (and $fe).
+static CurveDiscretizer fuzz_discretizer()
+{
+  return CurveDiscretizer([](const char *) { return std::optional<double>(); });
+}
+
 static void fuzz_quiet_output(const Message&, void *) {}
 
 // Silence console output; set OPENSCAD_FUZZ_VERBOSE to see warnings.
@@ -45,6 +53,6 @@ static void fuzz_init()
   extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) \
   {                                                                       \
     const std::string filename = fuzz_write_file(data, size, ext);        \
-    call;                                                                 \
+    (void)call;                                                               \
     return 0;                                                             \
   }
