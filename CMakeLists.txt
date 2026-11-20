@@ -37,6 +37,7 @@ configure_file(
 
 option(INFO "Display build configuration info at end of cmake config" ON)
 option(ENABLE_TESTS "Run testsuite after building." ON)
+option(ENABLE_FUZZING "Build the libFuzzer targets in tests/fuzz (requires clang)." OFF)
 option(ENABLE_GUI_TESTS "Compile a special version of the openscad gui with feature for testing." OFF)
 option(EXPERIMENTAL "Enable Experimental Features" OFF)
 option(USE_MANIFOLD_TRIANGULATOR "Use Manifold's triangulator instead of CGAL's" ON)
@@ -1860,6 +1861,19 @@ if(ENABLE_TESTS)
   endif()
 
   add_subdirectory(tests)
+endif()
+
+if(ENABLE_FUZZING)
+  # Build with e.g. -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang
+  # -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined,fuzzer-no-link" -DCMAKE_C_FLAGS=... (see tests/fuzz/README.md)
+  file(GLOB FUZZ_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/fuzz_*.cc")
+  foreach(FUZZ_SOURCE ${FUZZ_SOURCES})
+    get_filename_component(FUZZ_TARGET ${FUZZ_SOURCE} NAME_WE)
+    add_executable(${FUZZ_TARGET} ${FUZZ_SOURCE})
+    target_link_libraries(${FUZZ_TARGET} PRIVATE OpenSCADLibInternal svg)
+    target_compile_options(${FUZZ_TARGET} PRIVATE -fsanitize=fuzzer)
+    target_link_options(${FUZZ_TARGET} PRIVATE -fsanitize=fuzzer)
+  endforeach()
 endif()
 
 if(OFFLINE_DOCS)
