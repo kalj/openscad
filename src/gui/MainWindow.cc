@@ -3443,6 +3443,17 @@ void MainWindow::clearCurrentOutput()
   set_output_handler(nullptr, nullptr, nullptr);
 }
 
+void MainWindow::restoreOutput(const OutputHandlers& previous)
+{
+  // The previous output may belong to a window that has been closed in the meantime.
+  auto *previousWindow = static_cast<MainWindow *>(previous.userdata);
+  if (previousWindow && !scadApp->windowManager.getWindows().contains(previousWindow)) {
+    clearCurrentOutput();
+    return;
+  }
+  set_output_handler(previous.handler, previous.handler2, previous.userdata);
+}
+
 void MainWindow::openCSGSettingsChanged()
 {
 #ifdef ENABLE_OPENCSG

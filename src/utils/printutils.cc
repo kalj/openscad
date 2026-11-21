@@ -47,6 +47,8 @@ void set_output_handler(OutputHandlerFunc *newhandler, OutputHandlerFunc2 *newha
   outputhandler_data = userdata;
 }
 
+OutputHandlers get_output_handlers() { return {outputhandler, outputhandler2, outputhandler_data}; }
+
 void no_exceptions_for_warnings()
 {
   no_throw = true;

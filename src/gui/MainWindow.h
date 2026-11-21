@@ -372,10 +372,14 @@ public:
   void setCurrentOutput();
   void clearCurrentOutput();
   void hideCurrentOutput();
+  void restoreOutput(const OutputHandlers& previous);
+  // Restores the previous output afterwards, e.g. a render that is still running when
+  // a file is saved keeps logging to its console (#7119).
   auto scopedSetCurrentOutput()
   {
+    const auto previous = get_output_handlers();
     setCurrentOutput();
-    return sg::make_scope_guard([this] { clearCurrentOutput(); });
+    return sg::make_scope_guard([this, previous] { restoreOutput(previous); });
   }
   bool isEmpty();
 

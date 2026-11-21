@@ -115,6 +115,12 @@ extern bool rangeCheck;
 }  // namespace OpenSCAD
 
 void set_output_handler(OutputHandlerFunc *newhandler, OutputHandlerFunc2 *newhandler2, void *userdata);
+struct OutputHandlers {
+  OutputHandlerFunc *handler;
+  OutputHandlerFunc2 *handler2;
+  void *userdata;
+};
+OutputHandlers get_output_handlers();
 void no_exceptions_for_warnings();
 bool would_have_thrown();
 
