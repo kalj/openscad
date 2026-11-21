@@ -374,7 +374,7 @@ public:
   void hideCurrentOutput();
   void restoreOutput(const OutputHandlers& previous);
   // Restores the previous output afterwards, e.g. a render that is still running when
-  // a file is saved keeps logging to its console (#7119).
+  // a file is saved keeps logging to its console.
   auto scopedSetCurrentOutput()
   {
     const auto previous = get_output_handlers();
