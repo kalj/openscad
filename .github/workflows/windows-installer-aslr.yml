@@ -1,5 +1,7 @@
-# Throwaway test for openscad/openscad#7228: which executables fail to start
-# with 0xC000007B when mandatory ASLR (ForceRelocateImages) is enforced?
+# Throwaway test for openscad/openscad#7228: minimal NSIS 3.06.1 amd64 installers built
+# like MXE does (a), with stubs linked without relocations (b), and with makensis fixed to
+# update the base relocation directory when it moves sections (c), run with and without
+# mandatory ASLR (ForceRelocateImages).
 name: Windows installer ASLR test
 
 on:
@@ -9,88 +11,30 @@ on:
 
 jobs:
   aslr:
-    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-2025, windows-2022 ]
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Download
+      - uses: actions/checkout@v4
+      - name: Run the test installers
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dl | Out-Null
-          $urls = @{
-            'rc0.exe'       = 'https://github.com/openscad/openscad/releases/download/openscad-2026.11-RC0/OpenSCAD-2026.11-RC0-x86-64-Installer.exe'
-            'old2021.exe'   = 'https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe'
-            'npp.exe'       = 'https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.8/npp.8.8.8.Installer.x64.exe'
-          }
-          foreach ($k in $urls.Keys) {
-            try { Invoke-WebRequest $urls[$k] -OutFile "dl/$k"; Write-Host "got $k" } catch { Write-Host "could not get ${k}: $_" }
-          }
-
-      - name: PE details
-        shell: pwsh
-        run: |
-          function Show-PE($path) {
-            $b = [System.IO.File]::ReadAllBytes($path)
-            $pe = [BitConverter]::ToInt32($b, 0x3C)
-            $nsec = [BitConverter]::ToUInt16($b, $pe + 6)
-            $optsize = [BitConverter]::ToUInt16($b, $pe + 0x14)
-            $chars = [BitConverter]::ToUInt16($b, $pe + 0x16)
-            $opt = $pe + 0x18
-            $magic = [BitConverter]::ToUInt16($b, $opt)
-            $is64 = $magic -eq 0x20b
-            $imagebase = if ($is64) { [BitConverter]::ToUInt64($b, $opt + 0x18) } else { [BitConverter]::ToUInt32($b, $opt + 0x1C) }
-            $dllchars = [BitConverter]::ToUInt16($b, $opt + 0x46)
-            $ddir = $opt + $(if ($is64) { 0x70 } else { 0x60 })
-            $relocRva = [BitConverter]::ToUInt32($b, $ddir + 5 * 8)
-            $relocSize = [BitConverter]::ToUInt32($b, $ddir + 5 * 8 + 4)
-            Write-Host ("== {0}: PE{1} imagebase=0x{2:X} chars=0x{3:X4} dllchars=0x{4:X4} reloc rva=0x{5:X} size={6}" -f (Split-Path $path -Leaf), $(if ($is64) {'32+'} else {'32'}), $imagebase, $chars, $dllchars, $relocRva, $relocSize)
-            $sec = $opt + $optsize
-            $sections = @()
-            for ($i = 0; $i -lt $nsec; $i++) {
-              $s = $sec + $i * 40
-              $name = [System.Text.Encoding]::ASCII.GetString($b, $s, 8).TrimEnd([char]0)
-              $vsize = [BitConverter]::ToUInt32($b, $s + 8); $va = [BitConverter]::ToUInt32($b, $s + 12)
-              $rawsize = [BitConverter]::ToUInt32($b, $s + 16); $rawptr = [BitConverter]::ToUInt32($b, $s + 20)
-              $sc = [BitConverter]::ToUInt32($b, $s + 36)
-              $sections += [pscustomobject]@{ name = $name; va = $va; vsize = $vsize; rawptr = $rawptr; rawsize = $rawsize }
-              Write-Host ("   section {0,-8} va=0x{1:X} vsize=0x{2:X} raw=0x{3:X}+0x{4:X} chars=0x{5:X8}" -f $name, $va, $vsize, $rawptr, $rawsize, $sc)
-            }
-            if ($relocSize -gt 0) {
-              $rs = $sections | Where-Object { $relocRva -ge $_.va -and $relocRva -lt ($_.va + [Math]::Max($_.vsize, $_.rawsize)) } | Select-Object -First 1
-              if (-not $rs) { Write-Host "   reloc directory is not inside any section!"; return }
-              $off = $rs.rawptr + ($relocRva - $rs.va); $end = $off + $relocSize
-              while ($off + 8 -le $end) {
-                $page = [BitConverter]::ToUInt32($b, $off); $bsize = [BitConverter]::ToUInt32($b, $off + 4)
-                if ($bsize -lt 8) { Write-Host "   bad reloc block size $bsize"; break }
-                $types = @{}
-                for ($e = $off + 8; $e -lt $off + $bsize; $e += 2) { $t = [BitConverter]::ToUInt16($b, $e) -shr 12; $types[$t] = 1 + $types[$t] }
-                Write-Host ("   reloc block page=0x{0:X} size={1} types={2}" -f $page, $bsize, (($types.GetEnumerator() | ForEach-Object { "$($_.Key):$($_.Value)" }) -join ','))
-                $off += $bsize
-              }
+          $results = @()
+          foreach ($mitigation in 'none', 'force-relocate') {
+            foreach ($v in 'a', 'b', 'c') {
+              $name = "test-$v-$mitigation.exe"
+              Copy-Item "nsis-test\test-$v.exe" $name
+              if ($mitigation -ne 'none') { Set-ProcessMitigation -Name $name -Enable ForceRelocateImages }
+              $out = "$env:TEMP\nsistest"
+              Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
+              $p = Start-Process -FilePath ".\$name" -PassThru
+              Wait-Process -Id $p.Id -Timeout 30 -ErrorAction SilentlyContinue
+              if ($p.HasExited) { $code = '0x{0:X8}' -f $p.ExitCode } else { $code = 'HUNG'; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+              $results += [pscustomobject]@{ variant = $v; mitigation = $mitigation; exitcode = $code; installed = (Test-Path "$out\ok.ini") }
             }
           }
-          foreach ($f in Get-ChildItem dl -Filter *.exe) { Show-PE $f.FullName }
-
-      - name: Install RC0 without mitigation, then run installed openscad with it
-        shell: pwsh
-        run: |
-          $p = Start-Process -FilePath dl\rc0.exe -ArgumentList '/S', '/D=C:\osc' -Wait -PassThru
-          Write-Host "install exit $($p.ExitCode); openscad.exe present: $(Test-Path C:\osc\openscad.exe)"
-          foreach ($n in 'openscad.exe', 'openscad.com') { Set-ProcessMitigation -Name $n -Enable ForceRelocateImages }
-          foreach ($n in 'openscad.com', 'openscad.exe') {
-            $q = Start-Process -FilePath "C:\osc\$n" -ArgumentList '--version' -PassThru -RedirectStandardError "$n.err"
-            Wait-Process -Id $q.Id -Timeout 60 -ErrorAction SilentlyContinue
-            if ($q.HasExited) { Write-Host ("{0} --version with mandatory ASLR: exit 0x{1:X8}; {2}" -f $n, $q.ExitCode, (Get-Content "$n.err" -Raw)) }
-            else { Write-Host "$n --version with mandatory ASLR: HUNG"; Stop-Process -Id $q.Id -Force }
-          }
-
-      - name: Start installers with mitigation
-        shell: pwsh
-        run: |
-          foreach ($f in Get-ChildItem dl -Filter *.exe) {
-            Set-ProcessMitigation -Name $f.Name -Enable ForceRelocateImages
-            $p = Start-Process -FilePath $f.FullName -ArgumentList '/S', "/D=C:\inst-$($f.BaseName)" -PassThru
-            Wait-Process -Id $p.Id -Timeout 60 -ErrorAction SilentlyContinue
-            if ($p.HasExited) { Write-Host ("{0}: exit 0x{1:X8}" -f $f.Name, $p.ExitCode) }
-            else { Write-Host "$($f.Name): HUNG (error popup?)"; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
-          }
+          $results | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
           Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=(Get-Date).AddMinutes(-10)} -ErrorAction SilentlyContinue |
             Where-Object { $_.ProviderName -match 'Popup' } | Select-Object TimeCreated, Message | Format-List | Out-String -Width 300 | Write-Host
