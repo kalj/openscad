@@ -1,6 +1,6 @@
 # Throwaway test for openscad/openscad#7228: minimal NSIS 3.06.1 amd64 installers built
 # like MXE does (a), with stubs linked without relocations (b), and with makensis fixed to
-# update the base relocation directory when it moves sections (c), run with and without
+# update the base relocation directory and section file offsets when it moves sections (c), run with and without
 # mandatory ASLR (ForceRelocateImages).
 name: Windows installer ASLR test
 
@@ -29,9 +29,11 @@ jobs:
               if ($mitigation -ne 'none') { Set-ProcessMitigation -Name $name -Enable ForceRelocateImages }
               $out = "$env:TEMP\nsistest"
               Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
-              $p = Start-Process -FilePath ".\$name" -PassThru
-              Wait-Process -Id $p.Id -Timeout 30 -ErrorAction SilentlyContinue
-              if ($p.HasExited) { $code = '0x{0:X8}' -f $p.ExitCode } else { $code = 'HUNG'; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+              try {
+                $p = Start-Process -FilePath ".\$name" -PassThru -ErrorAction Stop
+                Wait-Process -Id $p.Id -Timeout 30 -ErrorAction SilentlyContinue
+                if ($p.HasExited) { $code = '0x{0:X8}' -f $p.ExitCode } else { $code = 'HUNG'; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+              } catch { $code = "START FAILED: $($_.Exception.Message)" }
               $results += [pscustomobject]@{ variant = $v; mitigation = $mitigation; exitcode = $code; installed = (Test-Path "$out\ok.ini") }
             }
           }
