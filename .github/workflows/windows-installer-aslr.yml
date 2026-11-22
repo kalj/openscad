@@ -1,5 +1,5 @@
-# Throwaway test for openscad/openscad#7228: does the Windows installer fail to
-# start with 0xC000007B when mandatory ASLR is enforced for it?
+# Throwaway test for openscad/openscad#7228: which executables fail to start
+# with 0xC000007B when mandatory ASLR (ForceRelocateImages) is enforced?
 name: Windows installer ASLR test
 
 on:
@@ -8,111 +8,89 @@ on:
     branches: [ windows-installer-aslr ]
 
 jobs:
-  installer:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ windows-2025, windows-2022 ]
-        mitigation: [ none, force-relocate ]
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }} ${{ matrix.mitigation }}
+  aslr:
+    runs-on: windows-2025
     steps:
-      - name: Download installers
+      - name: Download
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path dl | Out-Null
-          $rc = 'https://github.com/openscad/openscad/releases/download/openscad-2026.11-RC0/OpenSCAD-2026.11-RC0-x86-64-Installer.exe'
-          Invoke-WebRequest $rc -OutFile dl/rc0.exe
-          $sha = (Get-FileHash dl/rc0.exe -Algorithm SHA256).Hash.ToLower()
-          if ($sha -ne '0a33aa8a7a1455e66d2ec2fb7c430b6728b79c25222ff0383f5bbb8cd75f504d') { throw 'RC0 checksum mismatch' }
-          try {
-            $list = (Invoke-WebRequest 'https://files.openscad.org/snapshots/' -UseBasicParsing).Content
-            $latest = [regex]::Matches($list, 'OpenSCAD-[0-9.]+-x86-64-Installer\.exe') | ForEach-Object { $_.Value } | Sort-Object -Unique | Select-Object -Last 1
-            Write-Host "Newest snapshot installer: $latest"
-            Invoke-WebRequest "https://files.openscad.org/snapshots/$latest" -OutFile dl/snapshot.exe
-          } catch { Write-Host "Could not get a snapshot installer: $_" }
-
-      - name: PE headers
-        shell: pwsh
-        run: |
-          foreach ($f in Get-ChildItem dl -Filter *.exe) {
-            $b = [System.IO.File]::ReadAllBytes($f.FullName)
-            $pe = [BitConverter]::ToInt32($b, 0x3C)
-            $machine = [BitConverter]::ToUInt16($b, $pe + 4)
-            $chars = [BitConverter]::ToUInt16($b, $pe + 0x16)
-            $opt = $pe + 0x18
-            $magic = [BitConverter]::ToUInt16($b, $opt)
-            $dllchars = [BitConverter]::ToUInt16($b, $opt + 0x46)
-            $ddir = $opt + $(if ($magic -eq 0x20b) { 0x70 } else { 0x60 })
-            $relocSize = [BitConverter]::ToUInt32($b, $ddir + 5 * 8 + 4)
-            Write-Host ("{0}: machine=0x{1:X4} PE{2} RELOCS_STRIPPED={3} DYNAMIC_BASE={4} NX_COMPAT={5} reloc_dir_size={6}" -f `
-              $f.Name, $machine, $(if ($magic -eq 0x20b) { '32+' } else { '32' }), [bool]($chars -band 1), [bool]($dllchars -band 0x40), [bool]($dllchars -band 0x100), $relocSize)
+          $urls = @{
+            'rc0.exe'       = 'https://github.com/openscad/openscad/releases/download/openscad-2026.11-RC0/OpenSCAD-2026.11-RC0-x86-64-Installer.exe'
+            'old2021.exe'   = 'https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe'
+            'npp.exe'       = 'https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.8/npp.8.8.8.Installer.x64.exe'
+          }
+          foreach ($k in $urls.Keys) {
+            try { Invoke-WebRequest $urls[$k] -OutFile "dl/$k"; Write-Host "got $k" } catch { Write-Host "could not get ${k}: $_" }
           }
 
-      - name: Set mitigation
-        if: matrix.mitigation != 'none'
-        shell: pwsh
-        run: |
-          foreach ($n in 'rc0.exe', 'snapshot.exe') {
-            if ('${{ matrix.mitigation }}' -eq 'force-relocate') {
-              Set-ProcessMitigation -Name $n -Enable ForceRelocateImages
-            } else {
-              Set-ProcessMitigation -Name $n -Enable ForceRelocateImages, RequireInfo
-            }
-            Get-ProcessMitigation -Name $n | Select-Object -ExpandProperty Aslr | Format-List | Out-String | Write-Host
-          }
-
-      - name: Run installers
+      - name: PE details
         shell: pwsh
         run: |
           function Show-PE($path) {
-            try {
-              $b = [System.IO.File]::ReadAllBytes($path)
-              if ($b.Length -lt 0x40 -or $b[0] -ne 0x4D -or $b[1] -ne 0x5A) { return }
-              $pe = [BitConverter]::ToInt32($b, 0x3C)
-              $machine = [BitConverter]::ToUInt16($b, $pe + 4)
-              $chars = [BitConverter]::ToUInt16($b, $pe + 0x16)
-              $opt = $pe + 0x18
-              $magic = [BitConverter]::ToUInt16($b, $opt)
-              $dllchars = [BitConverter]::ToUInt16($b, $opt + 0x46)
-              $ddir = $opt + $(if ($magic -eq 0x20b) { 0x70 } else { 0x60 })
-              $relocSize = [BitConverter]::ToUInt32($b, $ddir + 5 * 8 + 4)
-              Write-Host ("  {0}: machine=0x{1:X4} RELOCS_STRIPPED={2} DYNAMIC_BASE={3} reloc_dir_size={4}" -f $path, $machine, [bool]($chars -band 1), [bool]($dllchars -band 0x40), $relocSize)
-            } catch {}
-          }
-          $start = Get-Date
-          foreach ($f in Get-ChildItem dl -Filter *.exe) {
-            $name = $f.BaseName
-            $dir = "C:\osc-$name"
-            Write-Host "=== $name (${{ matrix.mitigation }})"
-            $before = Get-Process | Select-Object -ExpandProperty Id
-            $p = Start-Process -FilePath $f.FullName -ArgumentList '/S', "/D=$dir" -PassThru
-            Wait-Process -Id $p.Id -Timeout 90 -ErrorAction SilentlyContinue
-            if ($p.HasExited) {
-              Write-Host ("exit code: 0x{0:X8}, installed: {1}" -f $p.ExitCode, (Test-Path "$dir\openscad.exe"))
-            } else {
-              Write-Host "HUNG after 90 s. New processes:"
-              Get-CimInstance Win32_Process | Where-Object { $before -notcontains $_.ProcessId } |
-                Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine | Format-List | Out-String -Width 300 | Write-Host
-              Write-Host "Windows with titles:"
-              Get-Process | Where-Object { $_.MainWindowTitle } | Select-Object Id, ProcessName, MainWindowTitle | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
-              Write-Host "PE headers of files extracted to TEMP:"
-              Get-ChildItem $env:TEMP -Recurse -Include *.exe, *.dll -ErrorAction SilentlyContinue |
-                Where-Object { $_.LastWriteTime -gt $start.AddMinutes(-1) } | ForEach-Object { Show-PE $_.FullName }
-              Write-Host "PE headers in the install dir:"
-              Get-ChildItem $dir -Recurse -Include *.exe -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Show-PE $_.FullName }
-              Get-Process | Where-Object { $before -notcontains $_.Id } | Stop-Process -Force -ErrorAction SilentlyContinue
+            $b = [System.IO.File]::ReadAllBytes($path)
+            $pe = [BitConverter]::ToInt32($b, 0x3C)
+            $nsec = [BitConverter]::ToUInt16($b, $pe + 6)
+            $optsize = [BitConverter]::ToUInt16($b, $pe + 0x14)
+            $chars = [BitConverter]::ToUInt16($b, $pe + 0x16)
+            $opt = $pe + 0x18
+            $magic = [BitConverter]::ToUInt16($b, $opt)
+            $is64 = $magic -eq 0x20b
+            $imagebase = if ($is64) { [BitConverter]::ToUInt64($b, $opt + 0x18) } else { [BitConverter]::ToUInt32($b, $opt + 0x1C) }
+            $dllchars = [BitConverter]::ToUInt16($b, $opt + 0x46)
+            $ddir = $opt + $(if ($is64) { 0x70 } else { 0x60 })
+            $relocRva = [BitConverter]::ToUInt32($b, $ddir + 5 * 8)
+            $relocSize = [BitConverter]::ToUInt32($b, $ddir + 5 * 8 + 4)
+            Write-Host ("== {0}: PE{1} imagebase=0x{2:X} chars=0x{3:X4} dllchars=0x{4:X4} reloc rva=0x{5:X} size={6}" -f (Split-Path $path -Leaf), $(if ($is64) {'32+'} else {'32'}), $imagebase, $chars, $dllchars, $relocRva, $relocSize)
+            $sec = $opt + $optsize
+            $sections = @()
+            for ($i = 0; $i -lt $nsec; $i++) {
+              $s = $sec + $i * 40
+              $name = [System.Text.Encoding]::ASCII.GetString($b, $s, 8).TrimEnd([char]0)
+              $vsize = [BitConverter]::ToUInt32($b, $s + 8); $va = [BitConverter]::ToUInt32($b, $s + 12)
+              $rawsize = [BitConverter]::ToUInt32($b, $s + 16); $rawptr = [BitConverter]::ToUInt32($b, $s + 20)
+              $sc = [BitConverter]::ToUInt32($b, $s + 36)
+              $sections += [pscustomobject]@{ name = $name; va = $va; vsize = $vsize; rawptr = $rawptr; rawsize = $rawsize }
+              Write-Host ("   section {0,-8} va=0x{1:X} vsize=0x{2:X} raw=0x{3:X}+0x{4:X} chars=0x{5:X8}" -f $name, $va, $vsize, $rawptr, $rawsize, $sc)
+            }
+            if ($relocSize -gt 0) {
+              $rs = $sections | Where-Object { $relocRva -ge $_.va -and $relocRva -lt ($_.va + [Math]::Max($_.vsize, $_.rawsize)) } | Select-Object -First 1
+              if (-not $rs) { Write-Host "   reloc directory is not inside any section!"; return }
+              $off = $rs.rawptr + ($relocRva - $rs.va); $end = $off + $relocSize
+              while ($off + 8 -le $end) {
+                $page = [BitConverter]::ToUInt32($b, $off); $bsize = [BitConverter]::ToUInt32($b, $off + 4)
+                if ($bsize -lt 8) { Write-Host "   bad reloc block size $bsize"; break }
+                $types = @{}
+                for ($e = $off + 8; $e -lt $off + $bsize; $e += 2) { $t = [BitConverter]::ToUInt16($b, $e) -shr 12; $types[$t] = 1 + $types[$t] }
+                Write-Host ("   reloc block page=0x{0:X} size={1} types={2}" -f $page, $bsize, (($types.GetEnumerator() | ForEach-Object { "$($_.Key):$($_.Value)" }) -join ','))
+                $off += $bsize
+              }
             }
           }
-          Write-Host "=== Mitigation event logs"
-          foreach ($log in 'Microsoft-Windows-Security-Mitigations/UserMode', 'Microsoft-Windows-Security-Mitigations/KernelMode') {
-            Get-WinEvent -LogName $log -MaxEvents 20 -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $start } |
-              Select-Object TimeCreated, Id, Message | Format-List | Out-String -Width 300 | Write-Host
+          foreach ($f in Get-ChildItem dl -Filter *.exe) { Show-PE $f.FullName }
+
+      - name: Install RC0 without mitigation, then run installed openscad with it
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dl\rc0.exe -ArgumentList '/S', '/D=C:\osc' -Wait -PassThru
+          Write-Host "install exit $($p.ExitCode); openscad.exe present: $(Test-Path C:\osc\openscad.exe)"
+          foreach ($n in 'openscad.exe', 'openscad.com') { Set-ProcessMitigation -Name $n -Enable ForceRelocateImages }
+          foreach ($n in 'openscad.com', 'openscad.exe') {
+            $q = Start-Process -FilePath "C:\osc\$n" -ArgumentList '--version' -PassThru -RedirectStandardError "$n.err"
+            Wait-Process -Id $q.Id -Timeout 60 -ErrorAction SilentlyContinue
+            if ($q.HasExited) { Write-Host ("{0} --version with mandatory ASLR: exit 0x{1:X8}; {2}" -f $n, $q.ExitCode, (Get-Content "$n.err" -Raw)) }
+            else { Write-Host "$n --version with mandatory ASLR: HUNG"; Stop-Process -Id $q.Id -Force }
           }
-          Write-Host "=== Application errors"
-          Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=$start} -ErrorAction SilentlyContinue |
-            Select-Object -First 10 TimeCreated, ProviderName, Message | Format-List | Out-String -Width 300 | Write-Host
-          Write-Host "=== System log (popups/hard errors)"
-          Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=$start} -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Popup|Application Popup' } |
-            Select-Object -First 10 TimeCreated, ProviderName, Message | Format-List | Out-String -Width 300 | Write-Host
+
+      - name: Start installers with mitigation
+        shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem dl -Filter *.exe) {
+            Set-ProcessMitigation -Name $f.Name -Enable ForceRelocateImages
+            $p = Start-Process -FilePath $f.FullName -ArgumentList '/S', "/D=C:\inst-$($f.BaseName)" -PassThru
+            Wait-Process -Id $p.Id -Timeout 60 -ErrorAction SilentlyContinue
+            if ($p.HasExited) { Write-Host ("{0}: exit 0x{1:X8}" -f $f.Name, $p.ExitCode) }
+            else { Write-Host "$($f.Name): HUNG (error popup?)"; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          }
+          Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=(Get-Date).AddMinutes(-10)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'Popup' } | Select-Object TimeCreated, Message | Format-List | Out-String -Width 300 | Write-Host
