@@ -88,7 +88,8 @@ jobs:
             Write-Host "=== $name (${{ matrix.mitigation }})"
             $before = Get-Process | Select-Object -ExpandProperty Id
             $p = Start-Process -FilePath $f.FullName -ArgumentList '/S', "/D=$dir" -PassThru
-            if (Wait-Process -Id $p.Id -Timeout 90 -ErrorAction SilentlyContinue; $p.HasExited) {
+            Wait-Process -Id $p.Id -Timeout 90 -ErrorAction SilentlyContinue
+            if ($p.HasExited) {
               Write-Host ("exit code: 0x{0:X8}, installed: {1}" -f $p.ExitCode, (Test-Path "$dir\openscad.exe"))
             } else {
               Write-Host "HUNG after 90 s. New processes:"
