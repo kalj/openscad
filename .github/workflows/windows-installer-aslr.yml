@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ windows-2025, windows-2022 ]
-        mitigation: [ none, force-relocate, force-relocate-require-info ]
+        mitigation: [ none, force-relocate ]
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }} ${{ matrix.mitigation }}
     steps:
@@ -66,12 +66,52 @@ jobs:
       - name: Run installers
         shell: pwsh
         run: |
-          $results = @()
+          function Show-PE($path) {
+            try {
+              $b = [System.IO.File]::ReadAllBytes($path)
+              if ($b.Length -lt 0x40 -or $b[0] -ne 0x4D -or $b[1] -ne 0x5A) { return }
+              $pe = [BitConverter]::ToInt32($b, 0x3C)
+              $machine = [BitConverter]::ToUInt16($b, $pe + 4)
+              $chars = [BitConverter]::ToUInt16($b, $pe + 0x16)
+              $opt = $pe + 0x18
+              $magic = [BitConverter]::ToUInt16($b, $opt)
+              $dllchars = [BitConverter]::ToUInt16($b, $opt + 0x46)
+              $ddir = $opt + $(if ($magic -eq 0x20b) { 0x70 } else { 0x60 })
+              $relocSize = [BitConverter]::ToUInt32($b, $ddir + 5 * 8 + 4)
+              Write-Host ("  {0}: machine=0x{1:X4} RELOCS_STRIPPED={2} DYNAMIC_BASE={3} reloc_dir_size={4}" -f $path, $machine, [bool]($chars -band 1), [bool]($dllchars -band 0x40), $relocSize)
+            } catch {}
+          }
+          $start = Get-Date
           foreach ($f in Get-ChildItem dl -Filter *.exe) {
             $name = $f.BaseName
             $dir = "C:\osc-$name"
-            $p = Start-Process -FilePath $f.FullName -ArgumentList '/S', "/D=$dir" -Wait -PassThru
-            $code = '0x{0:X8}' -f $p.ExitCode
-            $results += [pscustomobject]@{ installer = $name; mitigation = '${{ matrix.mitigation }}'; exitcode = $code; installed = (Test-Path "$dir\openscad.exe") }
+            Write-Host "=== $name (${{ matrix.mitigation }})"
+            $before = Get-Process | Select-Object -ExpandProperty Id
+            $p = Start-Process -FilePath $f.FullName -ArgumentList '/S', "/D=$dir" -PassThru
+            if (Wait-Process -Id $p.Id -Timeout 90 -ErrorAction SilentlyContinue; $p.HasExited) {
+              Write-Host ("exit code: 0x{0:X8}, installed: {1}" -f $p.ExitCode, (Test-Path "$dir\openscad.exe"))
+            } else {
+              Write-Host "HUNG after 90 s. New processes:"
+              Get-CimInstance Win32_Process | Where-Object { $before -notcontains $_.ProcessId } |
+                Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine | Format-List | Out-String -Width 300 | Write-Host
+              Write-Host "Windows with titles:"
+              Get-Process | Where-Object { $_.MainWindowTitle } | Select-Object Id, ProcessName, MainWindowTitle | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
+              Write-Host "PE headers of files extracted to TEMP:"
+              Get-ChildItem $env:TEMP -Recurse -Include *.exe, *.dll -ErrorAction SilentlyContinue |
+                Where-Object { $_.LastWriteTime -gt $start.AddMinutes(-1) } | ForEach-Object { Show-PE $_.FullName }
+              Write-Host "PE headers in the install dir:"
+              Get-ChildItem $dir -Recurse -Include *.exe -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Show-PE $_.FullName }
+              Get-Process | Where-Object { $before -notcontains $_.Id } | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
           }
-          $results | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+          Write-Host "=== Mitigation event logs"
+          foreach ($log in 'Microsoft-Windows-Security-Mitigations/UserMode', 'Microsoft-Windows-Security-Mitigations/KernelMode') {
+            Get-WinEvent -LogName $log -MaxEvents 20 -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $start } |
+              Select-Object TimeCreated, Id, Message | Format-List | Out-String -Width 300 | Write-Host
+          }
+          Write-Host "=== Application errors"
+          Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=$start} -ErrorAction SilentlyContinue |
+            Select-Object -First 10 TimeCreated, ProviderName, Message | Format-List | Out-String -Width 300 | Write-Host
+          Write-Host "=== System log (popups/hard errors)"
+          Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=$start} -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Popup|Application Popup' } |
+            Select-Object -First 10 TimeCreated, ProviderName, Message | Format-List | Out-String -Width 300 | Write-Host
