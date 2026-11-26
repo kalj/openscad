@@ -1,6 +1,7 @@
 # Throwaway test for openscad/openscad#7228: minimal NSIS 3.06.1 amd64 installers built
 # like MXE does (a), with stubs linked without relocations (b), and with makensis fixed to
-# update the base relocation directory and section file offsets when it moves sections (c), run with and without
+# update the base relocation directory and section file offsets when it moves sections (c),
+# and NSIS 3.13 built the MXE way (d), run with and without
 # mandatory ASLR (ForceRelocateImages).
 name: Windows installer ASLR test
 
@@ -23,7 +24,7 @@ jobs:
         run: |
           $results = @()
           foreach ($mitigation in 'none', 'force-relocate') {
-            foreach ($v in 'a', 'b', 'c') {
+            foreach ($v in 'a', 'b', 'c', 'd') {
               $name = "test-$v-$mitigation.exe"
               Copy-Item "nsis-test\test-$v.exe" $name
               if ($mitigation -ne 'none') { Set-ProcessMitigation -Name $name -Enable ForceRelocateImages }
