@@ -927,6 +927,7 @@ list(APPEND EXPORT_PARAM_TEST_FILES
   ${TEST_SCAD_DIR}/issues/issue6597.scad
   ${TEST_SCAD_DIR}/issues/issue7013.scad
   ${TEST_CUSTOMIZER_DIR}/crlf-line-endings.scad
+  ${TEST_CUSTOMIZER_DIR}/plain-block-comment.scad
 )
 
 list(APPEND EXPORT_IMPORT_3D_FILES

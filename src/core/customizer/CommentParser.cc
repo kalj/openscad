@@ -3,6 +3,7 @@
 #include <boost/range/adaptor/reversed.hpp>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -175,17 +176,21 @@ static std::string getDescription(const std::string& fulltext, int line)
 }
 
 /*
-   Create groups by parsing the multi line comment provided
+   Create a group from the text of a single-line block comment, e.g. " [Group name] ".
+   Returns no group if the text doesn't contain a [group name], so ordinary
+   comments don't end the current group.
  */
-static GroupInfo createGroup(std::string comment, int lineNo)
+static std::optional<GroupInfo> createGroup(std::string comment, int lineNo)
 {
   // store info related to group
   GroupInfo groupInfo;
   std::string finalGroupName;
+  bool found = false;
 
   boost::regex regex("\\[(.*?)\\]");
   boost::match_results<std::string::const_iterator> match;
   while (boost::regex_search(comment, match, regex)) {
+    found = true;
     std::string groupName = match[1].str();
     if (finalGroupName.empty()) {
       finalGroupName = groupName;
@@ -197,6 +202,7 @@ static GroupInfo createGroup(std::string comment, int lineNo)
     comment = match.suffix();
   }
 
+  if (!found) return std::nullopt;
   groupInfo.commentString = finalGroupName;
   groupInfo.lineNo = lineNo;
   return groupInfo;
@@ -260,7 +266,9 @@ static GroupList collectGroups(const std::string& fulltext)
         i++;
       }
 
-      if (isGroup) groupList.push_back(createGroup(comment, lineNo));
+      if (isGroup) {
+        if (auto group = createGroup(comment, lineNo)) groupList.push_back(*group);
+      }
     }
   }
   return groupList;

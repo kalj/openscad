@@ -1,0 +1,1 @@
+{"parameters":[{"group":"Parameters","initial":1.0,"name":"param1","step":1.0,"type":"number"},{"group":"Settings","initial":4.0,"name":"param4","step":1.0,"type":"number"},{"group":"Settings","initial":5.0,"name":"param5","step":1.0,"type":"number"}],"title":"plain-block-comment"}
