@@ -66,6 +66,7 @@ private:
   QTabWidget *tabWidget;
 
   bool maybeSave(int);
+  [[nodiscard]] bool canCloseTabs() const;
   bool save(EditorInterface *edt, const QString& path);
   void saveError(const QIODevice& file, const std::string& msg, const QString& filepath);
   void applyAction(QObject *object, const std::function<void(int, EditorInterface *)>& func);

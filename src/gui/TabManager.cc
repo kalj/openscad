@@ -100,9 +100,21 @@ void TabManager::tabSwitched(int x)
   emit currentEditorChanged(editor);
 }
 
+bool TabManager::canCloseTabs() const
+{
+  // While a preview or render is running, the rendered tab's node tree is still in use (a render
+  // evaluates it in a worker thread), and closing that tab would free it.
+  if (GuiLocker::isLocked()) {
+    LOG(message_group::UI_Warning, _("Can't close a tab during a preview or render."));
+    return false;
+  }
+  return true;
+}
+
 void TabManager::closeTabRequested(int x)
 {
   assert(tabWidget != nullptr);
+  if (!canCloseTabs()) return;
   if (!maybeSave(x)) return;
 
   auto *closingEditor = qobject_cast<EditorInterface *>(tabWidget->widget(x));
@@ -398,6 +410,7 @@ void TabManager::closeTab()
 
 void TabManager::closeAllButThisTab()
 {
+  if (!canCloseTabs()) return;
   applyAction(QObject::sender(), [this](int idx, EditorInterface *) {
     int total = count();
     for (int i = total - 1; i >= 0; i--) {
