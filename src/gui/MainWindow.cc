@@ -2029,6 +2029,7 @@ void MainWindow::cgalRender()
     this->geomRenderer = nullptr;
   });
   rootGeom.reset();
+  rootGeomEditor = renderedEditor;
 
   LOG("Rendering Polygon Mesh using %1$s...",
       renderBackend3DToString(RenderSettings::inst()->backend3D).c_str());
@@ -2095,8 +2096,7 @@ void MainWindow::actionRenderDone(const std::shared_ptr<const Geometry>& root_ge
     renderCompleteSoundEffect->play();
   }
 
-  renderedEditor = activeEditor;
-  activeEditor->contentsRendered = true;
+  if (rootGeomEditor) rootGeomEditor->contentsRendered = true;
   compileEnded();
 }
 
@@ -2510,27 +2510,28 @@ void MainWindow::on_designCheckValidity_triggered()
 bool MainWindow::canExport(unsigned int dim)
 {
   auto guard = scopedSetCurrentOutput();
-  if (!rootGeom) {
+  if (!rootGeom || !rootGeomEditor) {
     LOG(message_group::Error, "Nothing to export! Try rendering first (press F6)");
     return false;
   }
 
-  // editor has changed since last render
+  // The geometry is from the last render (F6). Only export it from the tab it was rendered from,
+  // so that it's clear which model is exported and what to name the file.
+  if (rootGeomEditor != activeEditor) {
+    const QString name = !rootGeomEditor->filepath.isEmpty()
+                           ? QFileInfo(rootGeomEditor->filepath).fileName()
+                           : QString("Untitled");
+    QMessageBox::information(this, "Application",
+                             QString("The last render (F6) was of another tab, \"%1\".\n"
+                                     "Switch to that tab to export it, or render this tab first.")
+                               .arg(name));
+    return false;
+  }
+
   if (!activeEditor->contentsRendered) {
     auto ret = QMessageBox::warning(this, "Application",
                                     "The current tab has been modified since its last render (F6).\n"
-                                    "Do you really want to export the previous content?",
-                                    QMessageBox::Yes | QMessageBox::No);
-    if (ret != QMessageBox::Yes) {
-      return false;
-    }
-  }
-
-  // other tab contents most recently rendered
-  if (renderedEditor != activeEditor) {
-    auto ret = QMessageBox::warning(this, "Application",
-                                    "The rendered data is of different tab.\n"
-                                    "Do you really want to export the another tab's content?",
+                                    "Do you want to export the previous content?",
                                     QMessageBox::Yes | QMessageBox::No);
     if (ret != QMessageBox::Yes) {
       return false;
@@ -3185,6 +3186,11 @@ QString MainWindow::getDockBaseName(const QString& title) const
 
 void MainWindow::onTabManagerAboutToCloseEditor(EditorInterface *closingEditor)
 {
+  // Don't offer to export the last render once its tab is gone
+  if (closingEditor == rootGeomEditor) {
+    rootGeomEditor = nullptr;
+    rootGeom.reset();
+  }
   // This slots is in charge of closing properly the preview when the
   // associated editor is about to close.
   if (closingEditor == renderedEditor) {

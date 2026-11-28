@@ -470,6 +470,8 @@ private:
   std::unordered_map<QString, QString> exportPaths;  // for each file type, where it was exported to last
   // look up the last export path and generate one if not found
   QString exportPath(const QString& suffix, const QString& basename = "");
+  // The editor whose content the last render (F6), and so rootGeom, came from
+  EditorInterface *rootGeomEditor = nullptr;
   int lastParserErrorPos{-1};  // last highlighted error position
   int tabCount = 0;
   ExportPdfPaperSize sizeString2Enum(const QString& current);
